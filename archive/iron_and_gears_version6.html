@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iron & Gears · 鐵律與齒輪</title>
+<style>
+:root{--bg:#100804;--card-border:#7a5020;--brass:#b07830;--gold:#e0a020;--text:#f0e0c0;--dim:rgba(240,220,180,0.5);--mana:#4a90d0;--red:#e04040;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:Georgia,serif;min-height:100vh;}
+#game{max-width:680px;margin:0 auto;padding:0 8px 8px;}
+
+/* ── Title ── */
+#title-bar{text-align:center;padding:10px 0 6px;border-bottom:1px solid rgba(176,120,48,.3);margin-bottom:6px;}
+.game-title{font-size:15px;letter-spacing:3px;color:var(--gold);text-shadow:0 0 14px rgba(220,160,30,.4);}
+
+/* ── Info bars ── */
+.info-bar{display:flex;align-items:center;gap:10px;padding:5px 8px;background:rgba(0,0,0,.35);border-radius:6px;margin-bottom:4px;}
+.hp-orb{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:bold;}
+.hp-icon{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8898,#c01830,#780014);border:2px solid #e03048;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);cursor:pointer;transition:box-shadow .2s;}
+.hp-icon.valid-target{box-shadow:0 0 0 3px #ff4040,0 0 14px rgba(255,60,60,.6);animation:pulse .8s ease-in-out infinite alternate;}
+.fuel-bar{display:flex;gap:3px;align-items:center;flex:1;}
+.fuel-crystal{width:14px;height:14px;border-radius:3px;background:#1a3870;border:1px solid #2a5090;transition:background .2s,box-shadow .2s;}
+.fuel-crystal.active{background:radial-gradient(circle at 35% 30%,#90c8ff,#1a68d0,#083890);border-color:#60a0f0;box-shadow:0 0 4px rgba(100,160,255,.5);}
+.fuel-label{font-size:11px;color:var(--dim);margin-left:4px;}
+.info-extra{font-size:10px;color:rgba(220,180,100,.45);margin-left:auto;}
+
+/* ── Boards ── */
+.board-area{min-height:130px;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 8px 16px;background:rgba(255,200,100,.04);border-radius:8px;border:1px dashed rgba(180,120,40,.18);flex-wrap:wrap;overflow:visible;}
+.board-empty{color:var(--dim);font-size:11px;font-style:italic;}
+
+/* ── Minion cards (board) ── */
+.minion-card{width:92px;height:126px;background:#1e1006;border:2px solid var(--card-border);border-radius:8px;position:relative;cursor:pointer;transition:transform .2s,box-shadow .2s;overflow:visible;flex-shrink:0;display:flex;flex-direction:column;}
+.minion-card:hover{transform:translateY(-4px);}
+.minion-card.can-attack{box-shadow:0 0 0 1.5px #60c060,0 0 8px rgba(80,200,80,.3);}
+.minion-card.selected-attacker{border-color:#f0a020;box-shadow:0 0 0 2px #f0a020,0 0 14px rgba(240,160,32,.5);}
+.minion-card.valid-target{border-color:#e03030;box-shadow:0 0 0 2px #e03030,0 0 10px rgba(220,50,50,.5);animation:pulse .8s ease-in-out infinite alternate;cursor:crosshair;}
+.minion-card.exhausted{opacity:.6;filter:grayscale(.35);}
+.minion-card.dying{animation:explode .4s ease-out forwards;}
+@keyframes explode{0%{transform:scale(1);opacity:1;}60%{transform:scale(1.2);opacity:.8;}100%{transform:scale(0);opacity:0;}}
+@keyframes pulse{from{box-shadow:0 0 0 2px #e03030,0 0 6px rgba(220,50,50,.4);}to{box-shadow:0 0 0 3px #ff4040,0 0 16px rgba(255,60,60,.6);}}
+
+.card-portrait-mini{width:100%;height:54px;border-radius:6px 6px 0 0;overflow:hidden;flex-shrink:0;}
+.portrait-img{width:100%;height:100%;display:block;object-fit:cover;object-position:center;}
+.card-name-mini{font-size:7.5px;font-weight:bold;text-align:center;color:var(--text);padding:2px 3px;line-height:1.2;display:flex;align-items:center;justify-content:center;flex:1;}
+.card-text-mini{font-size:6.5px;color:rgba(240,200,140,.65);text-align:center;padding:0 3px 2px;font-style:italic;line-height:1.2;}
+.card-stats{position:absolute;bottom:-7px;left:0;right:0;display:flex;justify-content:space-between;padding:0 3px;}
+.stat-gem{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);border:1.5px solid;}
+.gem-atk{background:radial-gradient(circle at 35% 30%,#ffe870,#c88010,#7a4800);border-color:#dda020;}
+.gem-hp{background:radial-gradient(circle at 35% 30%,#ff8898,#c01830,#780014);border-color:#e03048;}
+.gem-hp.wounded{background:radial-gradient(circle at 35% 30%,#ff3030,#a00808,#600004);}
+.taunt-ring{position:absolute;inset:-4px;border:2px solid #88bb30;border-radius:12px;pointer-events:none;box-shadow:0 0 8px rgba(140,200,50,.4);}
+
+/* ── Hero target ── */
+.hero-btn{display:inline-flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4a2c18,#1e0c04);border:2.5px solid var(--card-border);cursor:pointer;font-size:22px;transition:border-color .2s,box-shadow .2s;position:relative;flex-shrink:0;}
+.hero-btn .hp-badge{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8898,#c01830);border:1.5px solid #e03048;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;}
+.hero-btn.valid-target{border-color:#e03030;box-shadow:0 0 12px rgba(220,50,50,.5);animation:pulse .8s ease-in-out infinite alternate;cursor:crosshair;}
+
+/* ── Divider ── */
+#divider{text-align:center;padding:3px 0;font-size:11px;color:rgba(180,120,40,.4);letter-spacing:3px;}
+
+/* ── Controls ── */
+#player-controls{display:flex;gap:6px;padding:4px 0;align-items:center;flex-wrap:wrap;}
+.btn{padding:5px 12px;border:1.5px solid var(--brass);background:rgba(180,120,40,.12);color:var(--text);border-radius:4px;cursor:pointer;font-family:Georgia,serif;font-size:11px;transition:background .15s,border-color .15s;}
+.btn:hover:not(:disabled){background:rgba(180,120,40,.28);border-color:var(--gold);}
+.btn.primary{border-color:var(--gold);background:rgba(220,160,20,.18);color:#f0e090;}
+.btn.danger{border-color:#c04030;background:rgba(180,50,40,.12);color:#f08080;}
+.btn.music-on{border-color:#70b060;background:rgba(80,160,80,.18);color:#d8f0c0;}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.phase-hint{font-size:10px;color:rgba(220,180,80,.5);font-style:italic;margin-left:auto;}
+#music-toggle{position:fixed;top:10px;right:10px;z-index:90;min-width:64px;box-shadow:0 8px 24px rgba(0,0,0,.38);backdrop-filter:blur(6px);}
+
+/* ── Hand ── */
+#player-hand{display:flex;gap:6px;padding:10px 4px 16px;justify-content:center;flex-wrap:wrap;min-height:132px;align-items:flex-end;border-top:1px solid rgba(180,120,40,.18);margin-top:6px;overflow:visible;}
+.hand-card{width:84px;height:118px;background:#1e1006;border:2px solid var(--card-border);border-radius:8px;position:relative;cursor:pointer;transition:transform .2s,box-shadow .2s;overflow:visible;flex-shrink:0;display:flex;flex-direction:column;}
+.hand-card:hover{transform:translateY(-10px) scale(1.06);z-index:10;}
+.hand-card.selected-hand{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 0 14px rgba(220,160,30,.5);transform:translateY(-12px) scale(1.08);z-index:10;}
+.hand-card.cant-afford{opacity:.45;filter:grayscale(.4);}
+.hand-card .mana-gem{position:absolute;top:-5px;left:-5px;width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#90c8ff,#1a68d0,#083890);border:1.5px solid #60a0f0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);z-index:5;}
+.hand-portrait{width:100%;height:48px;border-radius:6px 6px 0 0;overflow:hidden;flex-shrink:0;}
+.hand-name{font-size:7px;font-weight:bold;text-align:center;padding:2px 2px;line-height:1.2;display:flex;align-items:center;justify-content:center;color:var(--text);background:rgba(176,120,48,.12);flex-shrink:0;}
+.hand-text{font-size:6px;color:rgba(240,210,160,.65);text-align:center;padding:2px 3px;font-style:italic;line-height:1.25;flex:1;}
+.hand-stats{position:absolute;bottom:-5px;left:0;right:0;display:flex;justify-content:space-between;padding:0 2px;}
+.hand-stats .stat-gem{width:19px;height:19px;font-size:9px;}
+
+/* ── Hover card zoom ── */
+#card-preview{position:fixed;top:50%;left:50%;z-index:2000;pointer-events:none;opacity:0;visibility:hidden;transform:translate(-50%,-50%) scale(.94);transition:opacity .14s ease,visibility .14s ease,transform .14s ease;}
+#card-preview.show{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1);}
+.card-zoom{position:relative;width:360px;height:500px;background:#1e1006;border:5px solid var(--card-border);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.78),0 0 0 2px rgba(224,160,32,.32),0 0 32px rgba(224,160,32,.22);display:flex;flex-direction:column;overflow:visible;}
+.card-zoom .zoom-mana{position:absolute;top:-15px;left:-15px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#90c8ff,#1a68d0,#083890);border:4px solid #60a0f0;display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.9);z-index:2;}
+.card-zoom .zoom-portrait{width:100%;height:235px;border-radius:13px 13px 0 0;overflow:hidden;flex-shrink:0;background:#140904;}
+.card-zoom .zoom-portrait svg,.card-zoom .zoom-portrait .portrait-img{width:100%;height:100%;display:block;object-fit:cover;object-position:center;}
+.card-zoom .zoom-name{min-height:62px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 26px;background:rgba(176,120,48,.14);border-top:2px solid rgba(176,120,48,.36);border-bottom:2px solid rgba(176,120,48,.28);color:var(--text);font-size:24px;font-weight:bold;line-height:1.15;}
+.card-zoom .zoom-text{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px 24px 28px;color:rgba(240,210,160,.82);font-size:20px;font-style:italic;line-height:1.35;}
+.card-zoom .zoom-stats{position:absolute;bottom:-16px;left:0;right:0;display:flex;justify-content:space-between;padding:0 18px;}
+.card-zoom .zoom-stats .stat-gem{width:64px;height:64px;font-size:29px;border-width:4px;}
+@media (max-width:480px),(max-height:640px){
+  .card-zoom{width:min(76vw,320px);height:min(82vh,444px);}
+  .card-zoom .zoom-portrait{height:47%;}
+  .card-zoom .zoom-name{font-size:20px;min-height:54px;}
+  .card-zoom .zoom-text{font-size:17px;padding:12px 20px 24px;}
+}
+
+/* ── Log ── */
+#game-log{border-top:1px solid rgba(180,120,40,.18);margin-top:6px;padding:6px 8px;max-height:90px;overflow-y:auto;background:rgba(0,0,0,.2);border-radius:0 0 6px 6px;font-size:10.5px;}
+#game-log::-webkit-scrollbar{width:4px;}
+#game-log::-webkit-scrollbar-track{background:rgba(0,0,0,.2);}
+#game-log::-webkit-scrollbar-thumb{background:rgba(176,120,48,.4);border-radius:2px;}
+.log-entry{padding:1px 0;border-bottom:1px solid rgba(180,120,40,.07);line-height:1.4;}
+.log-player{color:#c0d890;}.log-ai{color:#d090c0;}.log-sys{color:rgba(220,190,140,.45);font-style:italic;}.log-dmg{color:#e08080;}.log-death{color:#a06080;}
+
+/* ── Turn banner ── */
+#turn-banner{text-align:center;font-size:10px;color:rgba(200,160,80,.5);letter-spacing:1px;padding:3px 0;}
+#ai-thinking{display:none;text-align:center;color:rgba(200,140,200,.6);font-size:10px;font-style:italic;padding:3px;animation:blink 1s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:.4;}50%{opacity:1;}}
+
+/* ── Damage float ── */
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1);}70%{opacity:.9;}100%{opacity:0;transform:translateY(-44px) scale(1.35);}}
+.dmg-float{position:fixed;font-size:22px;font-weight:900;color:#ff4040;text-shadow:0 0 8px rgba(255,60,60,.7),0 1px 3px rgba(0,0,0,.9);pointer-events:none;z-index:1000;animation:floatUp .9s ease-out forwards;}
+
+/* ── Attack Animation ── */
+@keyframes impactShake{0%{transform:translate(0,0) rotate(0);}18%{transform:translate(-6px,-2px) rotate(-1.5deg);}36%{transform:translate(6px,2px) rotate(1.5deg);}54%{transform:translate(-4px,0) rotate(-.8deg);}72%{transform:translate(4px,0) rotate(.8deg);}100%{transform:translate(0,0) rotate(0);}}
+@keyframes impactRing{0%{opacity:.9;transform:scale(.8);}100%{opacity:0;transform:scale(2.4);}}
+.impact-shake{animation:impactShake .3s ease-out forwards !important;transform-origin:center center;}
+.impact-ring{position:fixed;width:56px;height:56px;border-radius:50%;border:3px solid #ff6030;pointer-events:none;z-index:800;transform:scale(.8);animation:impactRing .35s ease-out forwards;}
+.atk-clone{position:fixed;pointer-events:none;z-index:850;border-radius:8px;overflow:hidden;border:2px solid #f0d040;box-shadow:0 0 0 2px #f0a020,0 0 20px rgba(240,180,32,.9),0 4px 16px rgba(0,0,0,.6);}
+
+/* ── Game over ── */
+#game-over{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+#game-over.show{display:flex;}
+.go-title{font-size:30px;letter-spacing:4px;color:var(--gold);text-shadow:0 0 20px rgba(220,160,30,.6);}
+.go-sub{font-size:13px;color:var(--dim);text-align:center;max-width:280px;line-height:1.5;}
+
+/* ── AI hand visual indicator ── */
+.ai-hand-card{display:inline-block;width:22px;height:30px;background:#1a1008;border:1.5px solid #4a3010;border-radius:3px;margin:0 1px;vertical-align:middle;}
+</style>
+</head>
+<body>
+<button id="music-toggle" class="btn" onclick="toggleMusic()" title="切換背景音樂">音樂關</button>
+<div id="game">
+  <div id="title-bar">
+    <div class="game-title">⚙ 鐵律與齒輪 · Iron &amp; Gears ⚙</div>
+  </div>
+  <div id="ai-info" class="info-bar"></div>
+  <div id="ai-board" class="board-area"></div>
+  <div id="divider">─── ⚙ ─── ⚙ ─── ⚙ ───</div>
+  <div id="ai-thinking">自動化AI 計算中…</div>
+  <div id="player-board" class="board-area"></div>
+  <div id="player-controls"></div>
+  <div id="player-info" class="info-bar"></div>
+  <div id="player-hand"></div>
+  <div id="game-log"></div>
+  <div id="turn-banner"></div>
+</div>
+
+<div id="game-over">
+  <div class="go-title" id="go-title"></div>
+  <div class="go-sub" id="go-sub"></div>
+  <button class="btn primary" onclick="restartGame()" style="padding:8px 20px;font-size:13px;">重新開始</button>
+</div>
+<div id="card-preview" aria-hidden="true"></div>
+
+<script src="music/music.js"></script>
+<script src="music/music2.js"></script>
+
+<script>
+// ═══════════════════════════════════════
+//  CARD TEMPLATES
+// ═══════════════════════════════════════
+const TEMPLATES = [
+  // ── 原版六張 ──
+  { name:"原型蒸汽壓路機", cost:4, atk:4, hp:5, text:"",                                     portrait:"roller"  },
+  { name:"熱心的工坊學徒", cost:2, atk:2, hp:2, text:"報廢：召喚1/1機關陷阱",                  portrait:"worker",  deathrattle:true, drType:"summon11" },
+  { name:"報廢蒸氣巨獸",   cost:5, atk:3, hp:5, text:"攔截",                                  portrait:"beast",   taunt:true },
+  { name:"王牌拆解手",     cost:5, atk:4, hp:2, text:"部署：摧毀攻擊≥5的敵方手下",             portrait:"wrench",  battlecry:true,   bcType:"destroyhigh" },
+  { name:"巨型時鐘巨靈",   cost:10, atk:8, hp:8, text:"回合結束：儲存最多3點剩餘燃料",          portrait:"clock",   endOfTurn:true,   eotType:"savefuel" },
+  { name:"普通的自走齒輪", cost:1, atk:1, hp:1, text:"",                                      portrait:"gear"    },
+  // ── 新增十張 ──
+  { name:"蒸氣飛艇",       cost:1, atk:1, hp:1, text:"部署：抽一張牌",                         portrait:"gear",    battlecry:true,   bcType:"draw1" },
+  { name:"機油回收幫浦",   cost:2, atk:1, hp:3, text:"回合結束：回復自身 2 點生命值",            portrait:"worker",  endOfTurn:true,   eotType:"heal2self" },
+  { name:"不穩定電能炸彈", cost:2, atk:0, hp:2, text:"攔截，報廢：對隨機敵方手下造成 3 傷害",   portrait:"gear",    taunt:true,       deathrattle:true, drType:"dmg3rand" },
+  { name:"壓力閥盾衛",     cost:3, atk:2, hp:5, text:"攔截",                                  portrait:"beast",   taunt:true },
+  { name:"齒輪超載者",     cost:3, atk:3, hp:3, text:"部署：本回合獲得 1 點額外燃料",           portrait:"worker",  battlecry:true,   bcType:"fuel1" },
+  { name:"蒸汽狙擊手",     cost:4, atk:3, hp:3, text:"部署：對隨機敵方手下造成 2 傷害",         portrait:"wrench",  battlecry:true,   bcType:"dmg2rand" },
+  { name:"自動化維修機",   cost:4, atk:2, hp:6, text:"部署：使一個友方手下回復全部生命值",       portrait:"clock",   battlecry:true,   bcType:"healfriendly" },
+  { name:"巨型合金破城者", cost:6, atk:6, hp:7, text:"攔截",                                  portrait:"roller",  taunt:true },
+  { name:"工坊防禦核心",   cost:7, atk:4, hp:8, text:"攔截，報廢：抽兩張牌",                   portrait:"clock",   taunt:true,       deathrattle:true, drType:"draw2" },
+  { name:"核子平行迫擊炮", cost:8, atk:7, hp:7, text:"部署：摧毀所有敵方手下",                  portrait:"beast",   battlecry:true,   bcType:"destroyall" },
+];
+
+let UID = 0;
+function makeCard(t) {
+  return { id:UID++, name:t.name, cost:t.cost, atk:t.atk, hp:t.hp, maxHp:t.hp,
+    text:t.text, portrait:t.portrait,
+    taunt:!!t.taunt, deathrattle:!!t.deathrattle, battlecry:!!t.battlecry, endOfTurn:!!t.endOfTurn,
+    bcType:t.bcType||'', drType:t.drType||'', eotType:t.eotType||'',
+    hasAttacked:false, isSick:true };
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function makeDeck(){return shuffle(Array.from({length:30},()=>makeCard(TEMPLATES[Math.floor(Math.random()*TEMPLATES.length)])));}
+
+// ═══════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════
+let G = {};
+
+// ═══════════════════════════════════════
+//  MUSIC CONTROLS
+// ═══════════════════════════════════════
+// music/music.js supplies the audio engine; music/music2.js supplies this version's arrangement.
+async function startMusic() {
+  initAudio();
+  if(!Music.ctx) return;
+  if(Music.ctx.state === "suspended") await Music.ctx.resume();
+  Music.enabled = true;
+  Music.started = true;
+  Music.master.gain.cancelScheduledValues(Music.ctx.currentTime);
+  Music.master.gain.setTargetAtTime(0.16, Music.ctx.currentTime, 0.04);
+  Music.step = Music.step || 0;
+  Music.nextTime = Music.ctx.currentTime + 0.05;
+  clearInterval(Music.timer);
+  Music.timer = setInterval(musicScheduler, Music.lookahead);
+  musicScheduler();
+  render();
+}
+
+function stopMusic() {
+  Music.enabled = false;
+  clearInterval(Music.timer);
+  Music.timer = null;
+  if(Music.master) {
+    const now = Music.ctx.currentTime;
+    Music.master.gain.cancelScheduledValues(now);
+    Music.master.gain.setTargetAtTime(0.0001, now, 0.05);
+    setTimeout(()=>{
+      if(Music.master && !Music.enabled) Music.master.gain.value = 0.16;
+    }, 180);
+  }
+  render();
+}
+
+function toggleMusic() {
+  if(Music.enabled) stopMusic();
+  else startMusic();
+}
+
+function renderMusicToggle() {
+  const btn = document.getElementById("music-toggle");
+  if(!btn) return;
+  btn.textContent = Music.enabled ? "音樂開" : "音樂關";
+  btn.className = `btn${Music.enabled ? " music-on" : ""}`;
+}
+function initGame() {
+  G = {
+    turn:1, phase:'player', savedFuel:0, aiSavedFuel:0, gameOver:false,
+    player:{ hp:30, fuel:0, maxFuel:0, deck:[], hand:[], board:[], fatigue:0 },
+    ai:    { hp:30, fuel:0, maxFuel:0, deck:[], hand:[], board:[], fatigue:0 },
+    selHand:-1, selBoard:-1, log:[], aiThinking:false,
+  };
+  G.player.deck = makeDeck();
+  G.ai.deck     = makeDeck();
+  for(let i=0;i<3;i++){ drawCard(G.player,false); drawCard(G.ai,false); }
+  log("⚙️  歡迎來到《鐵律與齒輪》！先手玩家：林工程師","sys");
+  log("　選取手牌後按【部署】；點選己方手下再點對手/英雄發動攻擊","sys");
+  startPlayerTurn();
+}
+
+function drawCard(who, show=true) {
+  if(who.deck.length===0){
+    who.fatigue++;
+    who.hp -= who.fatigue;
+    if(show) log(`💀 ${who===G.player?'你':'AI'} 無牌可抽！疲勞 ${who.fatigue} 傷害！`,"dmg");
+    return;
+  }
+  const c = who.deck.shift();
+  if(who.hand.length>=10){
+    if(show) log(`🔥 ${who===G.player?'你':'AI'} 手牌滿！${c.name} 被燒毀！`,"sys");
+    return;
+  }
+  who.hand.push(c);
+  if(show && who===G.player) log(`📥 抽到了 ${c.name}`,"player");
+}
+
+// ═══════════════════════════════════════
+//  TURN FLOW
+// ═══════════════════════════════════════
+function startPlayerTurn() {
+  G.phase='player'; G.selHand=-1; G.selBoard=-1;
+  const extra=G.savedFuel; G.savedFuel=0;
+  G.player.maxFuel = Math.min(G.turn,10);
+  G.player.fuel    = G.player.maxFuel + extra;
+  for(const c of G.player.board){ c.hasAttacked=false; c.isSick=false; }
+  drawCard(G.player);
+  log(`─── 第 ${G.turn} 回合 ─── 你的燃料: ${G.player.fuel}/${G.player.maxFuel}`,"sys");
+  render();
+}
+
+function endPlayerTurn() {
+  if(G.phase!=='player'||G.gameOver) return;
+  G.selHand=-1; G.selBoard=-1;
+  handleEndOfTurnEffects(G.player);
+  log("─── 結束回合，輪到AI ───","sys");
+  G.phase='ai'; render();
+  setTimeout(doAiTurn,700);
+}
+
+// ═══════════════════════════════════════
+//  AI TURN
+// ═══════════════════════════════════════
+function doAiTurn() {
+  const aiExtra=G.aiSavedFuel; G.aiSavedFuel=0;
+  G.ai.maxFuel = Math.min(G.turn,10);
+  G.ai.fuel    = G.ai.maxFuel + aiExtra;
+  for(const c of G.ai.board){ c.hasAttacked=false; c.isSick=false; }
+  drawCard(G.ai,false);
+  log(`─── AI 回合 ─── 燃料: ${G.ai.fuel}/${G.ai.maxFuel}`,"ai");
+  G.aiThinking=true; render();
+  aiPlay(()=>{
+    G.aiThinking=false;
+    setTimeout(()=>{
+      aiAttackAll(()=>{
+        handleEndOfTurnEffects(G.ai);
+        G.turn++; if(checkWin())return; startPlayerTurn();
+      });
+    },500);
+  });
+}
+
+function aiPlay(cb,tries=0) {
+  if(tries>20){cb();return;}
+  const affordable = G.ai.hand
+    .map((c,i)=>({c,i}))
+    .filter(({c})=>c.cost<=G.ai.fuel)
+    .sort((a,b)=>(b.c.taunt?1:0)-(a.c.taunt?1:0)||(b.c.cost-a.c.cost));
+  if(!affordable.length||G.ai.board.length>=7){cb();return;}
+  const {c,i}=affordable[0];
+  G.ai.fuel-=c.cost; G.ai.hand.splice(i,1);
+  c.isSick=true; c.hasAttacked=false;
+  G.ai.board.push(c);
+  log(`⚙ AI 部署了 ${c.name}`,"ai");
+  if(c.battlecry){ doBattlecry(c, G.player, G.ai); }
+  render(); if(checkWin())return;
+  setTimeout(()=>aiPlay(cb,tries+1),600);
+}
+
+function aiAttackAll(cb) {
+  const a = G.ai.board.find(c=>canAttack(c));
+  if(!a){cb();return;}
+  const taunts=G.player.board.filter(c=>c.taunt);
+  const pool  =taunts.length?taunts:G.player.board;
+  let target=null,face=false;
+  if(!pool.length){ face=true; }
+  else {
+    const killNoLoss=pool.filter(t=>t.hp<=a.atk&&t.atk<a.hp);
+    const kill      =pool.filter(t=>t.hp<=a.atk);
+    if(killNoLoss.length) target=killNoLoss.reduce((m,t)=>t.atk>m.atk?t:m,killNoLoss[0]);
+    else if(kill.length)  target=kill[0];
+    else target=pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  // 找到 DOM 元素
+  const tgtEl = face
+    ? document.getElementById('player-hero-hp')
+    : document.querySelector(`#player-board [data-card-id="${target.id}"]`);
+
+  const atkId    = a.id;
+  const targetId = target ? target.id : null;
+
+  animateAttack(atkId, tgtEl, () => {
+    // 動畫結束後執行實際戰鬥
+    const a2 = G.ai.board.find(c=>c.id===atkId);
+    if(face){
+      if(a2){ G.player.hp-=a2.atk; a2.hasAttacked=true; log(`💢 AI的 ${a2.name} 直接攻擊你！-${a2.atk}`,"dmg"); showFloat(a2.atk,'player-hero-hp'); }
+    } else {
+      const def2 = G.player.board.find(c=>c.id===targetId);
+      if(a2 && def2) combat(a2,G.ai,def2,G.player);
+    }
+    render(); if(checkWin())return;
+    setTimeout(()=>aiAttackAll(cb), 300);
+  });
+}
+
+// ═══════════════════════════════════════
+//  COMBAT & EFFECTS
+// ═══════════════════════════════════════
+function combat(atk,atkOwner,def,defOwner) {
+  log(`⚡ ${atk.name}(${atk.atk}/${atk.hp}) 攻擊 ${def.name}(${def.atk}/${def.hp})`,"dmg");
+  atk.hp-=def.atk; def.hp-=atk.atk; atk.hasAttacked=true;
+  if(atk.hp<=0){ log(`💀 ${atk.name} 報廢了！`,"death"); killCard(atk,atkOwner,defOwner); }
+  if(def.hp<=0){ log(`💀 ${def.name} 報廢了！`,"death"); killCard(def,defOwner,atkOwner); }
+}
+
+// owner = side that owns the dying card; enemy = opposing side
+function killCard(c, owner, enemy) {
+  owner.board = owner.board.filter(x=>x.id!==c.id);
+  if(!c.deathrattle) return;
+  const tag = owner===G.player?"player":"ai";
+  switch(c.drType) {
+    case 'summon11':
+      if(owner.board.length<7){
+        const trap=makeCard({name:"機關陷阱",cost:0,atk:1,hp:1,text:"",portrait:"gear"});
+        trap.isSick=true; owner.board.push(trap);
+        log(`⚙ ${c.name} 報廢效果：召喚一個1/1機關陷阱！`,tag);
+      }
+      break;
+    case 'dmg3rand':
+      if(enemy&&enemy.board.length){
+        const t=enemy.board[Math.floor(Math.random()*enemy.board.length)];
+        log(`💥 ${c.name} 報廢效果：對 ${t.name} 造成 3 點傷害！`,tag);
+        t.hp-=3;
+        if(t.hp<=0){ log(`💀 ${t.name} 報廢了！`,"death"); killCard(t,enemy,owner); }
+      } else { log(`💥 ${c.name} 報廢效果：沒有敵方手下目標！`,"sys"); }
+      break;
+    case 'draw2':
+      drawCard(owner,true); drawCard(owner,true);
+      log(`📥 ${c.name} 報廢效果：抽了兩張牌！`,tag);
+      break;
+    default: break;
+  }
+}
+
+// enemy = opposing side; owner = who played the card
+function doBattlecry(c, enemy, owner) {
+  const tag = owner===G.player?"player":"ai";
+  switch(c.bcType) {
+    case 'draw1':
+      drawCard(owner,true);
+      log(`🃏 ${c.name} 部署效果：抽了一張牌！`,tag);
+      break;
+    case 'fuel1':
+      owner.fuel++;
+      log(`⚡ ${c.name} 部署效果：獲得 1 點額外燃料！（共 ${owner.fuel} 點）`,tag);
+      break;
+    case 'dmg2rand': {
+      if(!enemy.board.length){ log(`🔫 ${c.name} 部署效果：沒有目標！`,"sys"); break; }
+      const t=enemy.board[Math.floor(Math.random()*enemy.board.length)];
+      log(`🔫 ${c.name} 部署效果：對 ${t.name} 造成 2 點傷害！`,tag);
+      t.hp-=2;
+      if(t.hp<=0){ log(`💀 ${t.name} 報廢了！`,"death"); killCard(t,enemy,owner); }
+      break;
+    }
+    case 'healfriendly': {
+      const wounded=owner.board.filter(x=>x.hp<x.maxHp && x.id!==c.id);
+      if(!wounded.length){ log(`💚 ${c.name} 部署效果：戰場上沒有其他受傷的友方手下，維修光束空發了。`,"sys"); break; }
+      const t=wounded[Math.floor(Math.random()*wounded.length)];
+      const prev=t.hp; t.hp=t.maxHp;
+      log(`💚 ${c.name} 部署效果：${t.name} 回復了 ${t.hp-prev} 點生命值，防線修復完畢！`,tag);
+      break;
+    }
+    case 'destroyall': {
+      if(!enemy.board.length){ log(`💣 ${c.name} 部署效果：沒有敵方手下！`,"sys"); break; }
+      const killed=[...enemy.board];
+      enemy.board=[];
+      log(`💣 ${c.name} 部署效果：摧毀所有敵方手下！（共${killed.length}個）`,tag);
+      for(const t of killed){ log(`💀 ${t.name} 報廢了！`,"death"); killCard(t,enemy,owner); }
+      break;
+    }
+    case 'destroyhigh': {
+      const tgts=enemy.board.filter(t=>t.atk>=5);
+      if(!tgts.length){ log(`🔧 ${c.name} 部署效果：沒有攻擊≥5的目標`,"sys"); break; }
+      const t=tgts.reduce((m,x)=>x.atk>m.atk?x:m,tgts[0]);
+      log(`🔧 ${c.name} 部署效果：摧毀了 ${t.name}！`,tag);
+      killCard(t,enemy,owner);
+      break;
+    }
+    default: break;
+  }
+}
+
+function handleEndOfTurnEffects(who) {
+  for(const c of [...who.board]) {
+    if(!c.endOfTurn) continue;
+    const tag = who===G.player?"player":"ai";
+    switch(c.eotType) {
+      case 'savefuel':
+        if(who.fuel>0){
+          if(who===G.player){
+            G.savedFuel=Math.min(who.fuel,3);
+            log(`⏰ ${c.name} 儲存了 ${G.savedFuel} 燃料至下回合！`,tag);
+          } else {
+            G.aiSavedFuel=Math.min(who.fuel,3);
+            log(`⏰ AI的 ${c.name} 儲存了 ${G.aiSavedFuel} 燃料至下回合！`,tag);
+          }
+        }
+        break;
+      case 'heal2self':
+        if(c.hp<c.maxHp){
+          const heal=Math.min(2,c.maxHp-c.hp);
+          c.hp+=heal;
+          log(`🔩 ${c.name} 回合結束：自我回復 ${heal} 點生命！`,tag);
+        }
+        break;
+      default: break;
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  ATTACK ANIMATION
+// ═══════════════════════════════════════
+let G_animating = false;
+
+function animateAttack(atkCardId, tgtEl, onDone) {
+  if (!tgtEl) { onDone(); return; }
+  const atkEl = document.querySelector(`[data-card-id="${atkCardId}"]`);
+  if (!atkEl) { onDone(); return; }
+
+  G_animating = true;
+
+  const atkR = atkEl.getBoundingClientRect();
+  const tgtR = tgtEl.getBoundingClientRect();
+
+  // ── 建立飛行克隆牌 ──
+  const clone = document.createElement('div');
+  clone.className = 'atk-clone';
+  clone.innerHTML = atkEl.innerHTML;
+  Object.assign(clone.style, {
+    left: atkR.left + 'px',
+    top:  atkR.top  + 'px',
+    width:  atkR.width  + 'px',
+    height: atkR.height + 'px',
+    background: '#1e1006',
+    transform: 'scale(1)',
+    transition: 'none',
+    opacity: '1',
+  });
+  document.body.appendChild(clone);
+
+  const atkCX = atkR.left + atkR.width  / 2;
+  const atkCY = atkR.top  + atkR.height / 2;
+  const tgtCX = tgtR.left + tgtR.width  / 2;
+  const tgtCY = tgtR.top  + tgtR.height / 2;
+  const dx = tgtCX - atkCX;
+  const dy = tgtCY - atkCY;
+
+  // ── 第一段：懸浮升起 (130ms) ──
+  requestAnimationFrame(() => {
+    clone.style.transition = 'transform .13s ease-out, box-shadow .13s';
+    clone.style.transform  = 'translateY(-14px) scale(1.12)';
+    clone.style.boxShadow  = '0 0 0 3px #ffe060,0 10px 30px rgba(255,210,50,.7)';
+
+    setTimeout(() => {
+      // ── 第二段：衝向目標 (240ms) ──
+      clone.style.transition = 'transform .24s cubic-bezier(.4,0,.8,.6)';
+      clone.style.transform  = `translate(${dx}px,${dy - 14}px) scale(.88)`;
+
+      setTimeout(() => {
+        // ── 撞擊效果 ──
+        // 震動目標
+        tgtEl.classList.add('impact-shake');
+        const prevFilter = tgtEl.style.filter || '';
+        tgtEl.style.filter = 'brightness(3) saturate(.2)';
+        setTimeout(() => {
+          tgtEl.style.filter = prevFilter;
+          setTimeout(() => tgtEl.classList.remove('impact-shake'), 300);
+        }, 75);
+
+        // 撞擊光環
+        const ring = document.createElement('div');
+        ring.className = 'impact-ring';
+        Object.assign(ring.style, {
+          left: (tgtCX - 28) + 'px',
+          top:  (tgtCY - 28) + 'px',
+        });
+        document.body.appendChild(ring);
+        setTimeout(() => ring.remove(), 380);
+
+        // ── 第三段：彈回原位 (200ms) ──
+        clone.style.transition = 'transform .20s cubic-bezier(.34,1.4,.64,1), opacity .15s';
+        clone.style.transform  = 'translateY(0) scale(1)';
+
+        setTimeout(() => {
+          clone.style.transition = 'opacity .1s';
+          clone.style.opacity = '0';
+          setTimeout(() => {
+            clone.remove();
+            G_animating = false;
+            onDone();
+          }, 110);
+        }, 210);
+      }, 250);
+    }, 140);
+  });
+}
+
+// ═══════════════════════════════════════
+//  PLAYER ACTIONS
+// ═══════════════════════════════════════
+function selectHandCard(i) {
+  if(G.phase!=='player'||G.gameOver||G_animating)return;
+  G.selBoard=-1;
+  G.selHand = G.selHand===i ? -1 : i;
+  render();
+}
+
+function deployCard() {
+  if(G.phase!=='player'||G.selHand<0||G.gameOver)return;
+  if(G.player.board.length>=7){ log("❌ 戰場已滿！最多7個手下","sys"); return; }
+  const c=G.player.hand[G.selHand];
+  if(!c)return;
+  if(G.player.fuel<c.cost){ log(`❌ 燃料不足！需要 ${c.cost} 點`,"sys"); return; }
+  G.player.fuel-=c.cost; G.player.hand.splice(G.selHand,1);
+  c.isSick=true; c.hasAttacked=false; G.player.board.push(c);
+  G.selHand=-1; log(`⚙️ 成功部署 ${c.name}！`,"player");
+  if(c.battlecry){ doBattlecry(c,G.ai,G.player); }
+  render(); checkWin();
+}
+
+function selectAttacker(i) {
+  if(G.phase!=='player'||G.gameOver||G_animating)return;
+  G.selHand=-1;
+  const c=G.player.board[i];
+  if(!c)return;
+  if(c.isSick){ log("❌ 剛上場的手下本回合無法攻擊！","sys"); return; }
+  if(c.hasAttacked){ log("❌ 本回合已攻擊過了！","sys"); return; }
+  if(c.atk<=0){ log("❌ 攻擊力為 0 的手下無法攻擊！","sys"); return; }
+  G.selBoard = G.selBoard===i ? -1 : i;
+  render();
+}
+
+function attackMinion(i) {
+  if(G.phase!=='player'||G.selBoard<0||G.gameOver||G_animating)return;
+  const atk=G.player.board[G.selBoard];
+  if(!atk)return;
+  if(!canAttack(atk)){ G.selBoard=-1; render(); return; }
+  const taunts=G.ai.board.filter(c=>c.taunt);
+  const def=G.ai.board[i];
+  if(!def)return;
+  if(taunts.length&&!def.taunt){ log("❌ 對手有攔截（嘓諷）手下，必須先攻擊！","sys"); return; }
+
+  const tgtEl  = document.querySelector(`#ai-board [data-card-id="${def.id}"]`);
+  const atkId  = atk.id;
+  const savedSB = G.selBoard;
+  G.selBoard = -1; // 取消選中高亮，但先不 re-render
+
+  animateAttack(atkId, tgtEl, () => {
+    const atk2 = G.player.board.find(c=>c.id===atkId);
+    if(atk2 && def) combat(atk2, G.player, def, G.ai);
+    G.selBoard=-1; render(); checkWin();
+  });
+}
+
+function attackFace() {
+  if(G.phase!=='player'||G.selBoard<0||G.gameOver||G_animating)return;
+  const atk=G.player.board[G.selBoard];
+  if(!atk)return;
+  if(!canAttack(atk)){ G.selBoard=-1; render(); return; }
+  const taunts=G.ai.board.filter(c=>c.taunt);
+  if(taunts.length){ log("❌ 對手有攔截（嘓諷）手下，必須先攻擊！","sys"); return; }
+
+  // 優先飛向場上的英雄按鈕；其次飛向上方資訊列的 HP 圖示
+  const tgtEl = document.querySelector('#ai-board .hero-btn.valid-target')
+             || document.getElementById('ai-hero-hp');
+  const atkId  = atk.id;
+  G.selBoard = -1;
+
+  animateAttack(atkId, tgtEl, () => {
+    const atk2 = G.player.board.find(c=>c.id===atkId);
+    if(atk2){
+      G.ai.hp -= atk2.atk; atk2.hasAttacked=true;
+      log(`💥 你的 ${atk2.name} 直接攻擊AI英雄！-${atk2.atk}`,"player");
+      showFloat(atk2.atk,'ai-hero-hp');
+    }
+    G.selBoard=-1; render(); checkWin();
+  });
+}
+
+function surrender() {
+  if(G.gameOver)return;
+  if(confirm('確認投降？')){ G.player.hp=0; checkWin(); }
+}
+
+// ═══════════════════════════════════════
+//  WIN CHECK
+// ═══════════════════════════════════════
+function checkWin() {
+  if(G.gameOver)return false;
+  if(G.player.hp<=0||G.ai.hp<=0){
+    G.gameOver=true; G.aiThinking=false;
+    const win=G.ai.hp<=0;
+    document.getElementById("go-title").textContent = win?"🏆 勝利！":"💀 落敗";
+    document.getElementById("go-sub").textContent   = win
+      ?"恭喜！你用精湛的鋼鐵智慧擊敗了自動化AI！你的工坊屹立不搖！"
+      :"你的工坊核心過熱爆炸了… 但工程師永不言棄，再戰一局！";
+    document.getElementById("game-over").classList.add("show");
+    render(); return true;
+  }
+  return false;
+}
+
+function restartGame() {
+  document.getElementById("game-over").classList.remove("show");
+  initGame();
+}
+
+// ═══════════════════════════════════════
+//  VISUALS
+// ═══════════════════════════════════════
+function showFloat(n, anchorId) {
+  const el=document.createElement("div"); el.className="dmg-float"; el.textContent="-"+n;
+  const a=document.getElementById(anchorId);
+  if(a){ const r=a.getBoundingClientRect(); el.style.left=(r.left+r.width/2-14)+"px"; el.style.top=(r.top+r.height/2-14)+"px"; }
+  else { el.style.left="50%"; el.style.top="40%"; }
+  document.body.appendChild(el); setTimeout(()=>el.remove(),950);
+}
+
+const PORTRAIT_COLORS = {
+  gear:   ['#28283a','#14141c'], worker: ['#182810','#0c160a'],
+  roller: ['#382010','#1e100a'], beast:  ['#181828','#0c0c18'],
+  wrench: ['#300810','#180408'], clock:  ['#180c30','#0c0820'],
+};
+
+const PORTRAIT_SVG = {
+  gear: s=>`<circle cx="${s/2}" cy="${s/2}" r="${s*.25}" fill="none" stroke="#6a6a82" stroke-width="2"/>
+    <circle cx="${s/2}" cy="${s/2}" r="${s*.08}" fill="#6a6a82"/>
+    <line x1="${s/2}" y1="${s*.18}" x2="${s/2}" y2="${s*.34}" stroke="#6a6a82" stroke-width="2"/>
+    <line x1="${s/2}" y1="${s*.66}" x2="${s/2}" y2="${s*.82}" stroke="#6a6a82" stroke-width="2"/>
+    <line x1="${s*.18}" y1="${s/2}" x2="${s*.34}" y2="${s/2}" stroke="#6a6a82" stroke-width="2"/>
+    <line x1="${s*.66}" y1="${s/2}" x2="${s*.82}" y2="${s/2}" stroke="#6a6a82" stroke-width="2"/>`,
+  worker: s=>`<circle cx="${s*.5}" cy="${s*.33}" r="${s*.15}" fill="#8a7060"/>
+    <rect x="${s*.35}" y="${s*.5}" width="${s*.3}" height="${s*.32}" fill="#8a7060" rx="2"/>
+    <line x1="${s*.3}" y1="${s*.6}" x2="${s*.14}" y2="${s*.82}" stroke="#6a5040" stroke-width="2"/>
+    <line x1="${s*.7}" y1="${s*.6}" x2="${s*.86}" y2="${s*.82}" stroke="#6a5040" stroke-width="2"/>
+    <rect x="${s*.6}" y="${s*.23}" width="${s*.24}" height="${s*.08}" fill="#c09040" rx="1" transform="rotate(-30 ${s*.72} ${s*.27})"/>`,
+  roller: s=>`<ellipse cx="${s*.5}" cy="${s*.58}" rx="${s*.32}" ry="${s*.22}" fill="#5a4030" stroke="#8a6040" stroke-width="1.5"/>
+    <rect x="${s*.3}" y="${s*.28}" width="${s*.4}" height="${s*.16}" fill="#6a5040" rx="2"/>
+    <circle cx="${s*.24}" cy="${s*.6}" r="${s*.1}" fill="#3a2818" stroke="#6a4020" stroke-width="1.5"/>
+    <circle cx="${s*.76}" cy="${s*.6}" r="${s*.1}" fill="#3a2818" stroke="#6a4020" stroke-width="1.5"/>`,
+  beast: s=>`<ellipse cx="${s*.5}" cy="${s*.42}" rx="${s*.3}" ry="${s*.28}" fill="#404050" stroke="#606070" stroke-width="1"/>
+    <circle cx="${s*.38}" cy="${s*.38}" r="${s*.06}" fill="#60a0f0" opacity=".9"/>
+    <circle cx="${s*.62}" cy="${s*.38}" r="${s*.06}" fill="#60a0f0" opacity=".9"/>
+    <path d="M${s*.32},${s*.57} Q${s*.5},${s*.67} ${s*.68},${s*.57}" stroke="#808090" stroke-width="1.5" fill="none"/>
+    <line x1="${s*.4}" y1="${s*.68}" x2="${s*.38}" y2="${s*.84}" stroke="#606070" stroke-width="1.5"/>
+    <line x1="${s*.5}" y1="${s*.7}" x2="${s*.5}" y2="${s*.86}" stroke="#606070" stroke-width="1.5"/>
+    <line x1="${s*.6}" y1="${s*.68}" x2="${s*.62}" y2="${s*.84}" stroke="#606070" stroke-width="1.5"/>`,
+  wrench: s=>`<rect x="${s*.36}" y="${s*.16}" width="${s*.28}" height="${s*.68}" fill="#806040" rx="3" transform="rotate(-22 ${s*.5} ${s*.5})"/>
+    <circle cx="${s*.34}" cy="${s*.3}" r="${s*.1}" fill="none" stroke="#a08060" stroke-width="2.5"/>
+    <circle cx="${s*.66}" cy="${s*.7}" r="${s*.1}" fill="none" stroke="#a08060" stroke-width="2.5"/>
+    <line x1="${s*.26}" y1="${s*.54}" x2="${s*.74}" y2="${s*.46}" stroke="#e06050" stroke-width="1.5" opacity=".7"/>`,
+  clock: s=>`<circle cx="${s*.5}" cy="${s*.48}" r="${s*.3}" fill="none" stroke="#8060a0" stroke-width="2"/>
+    <circle cx="${s*.5}" cy="${s*.48}" r="${s*.27}" fill="#100820" opacity=".6"/>
+    <line x1="${s*.5}" y1="${s*.48}" x2="${s*.5}" y2="${s*.24}" stroke="#c0a0f0" stroke-width="2" stroke-linecap="round"/>
+    <line x1="${s*.5}" y1="${s*.48}" x2="${s*.66}" y2="${s*.55}" stroke="#e0c080" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="${s*.5}" cy="${s*.48}" r="${s*.04}" fill="#e0c080"/>
+    <circle cx="${s*.5}" cy="${s*.2}" r="${s*.04}" fill="#8060a0" opacity=".7"/>`,
+};
+
+const CARD_ART = {
+  "原型蒸汽壓路機": "character art/原型蒸氣壓路機.png",
+  "熱心的工坊學徒": "character art/熱心的工坊學徒.png",
+  "報廢蒸氣巨獸": "character art/報廢蒸氣巨獸.png",
+  "王牌拆解手": "character art/王牌拆解手.png",
+  "巨型時鐘巨靈": "character art/巨型時鐘巨靈.png",
+  "普通的自走齒輪": "character art/普通的自走齒輪.png",
+  "蒸氣飛艇": "character art/蒸氣飛艇.png",
+  "機油回收幫浦": "character art/機油回收幫浦.png",
+  "不穩定電能炸彈": "character art/不穩定電能炸彈.png",
+  "壓力閥盾衛": "character art/壓力閥盾衛.png",
+  "齒輪超載者": "character art/齒輪超載者.png",
+  "蒸汽狙擊手": "character art/蒸氣狙擊手.png",
+  "自動化維修機": "character art/自動化維修機.png",
+  "巨型合金破城者": "character art/巨型合金破城者.png",
+  "工坊防禦核心": "character art/工坊防禦核心.png",
+  "核子平行迫擊炮": "character art/核子平行迫擊炮.png",
+};
+
+function portraitSvg(card, s) {
+  const cols = PORTRAIT_COLORS[card.portrait]||['#222','#111'];
+  const icon = (PORTRAIT_SVG[card.portrait]||((x)=>''))(s);
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="pg${card.id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${cols[0]}"/><stop offset="100%" stop-color="${cols[1]}"/>
+    </linearGradient></defs>
+    <rect width="${s}" height="${s}" fill="url(#pg${card.id})"/>${icon}</svg>`;
+}
+
+function portraitArt(card, s) {
+  const art = CARD_ART[card.name];
+  if(!art) return portraitSvg(card, s);
+  return `<img class="portrait-img" src="${art}" alt="${card.name}">`;
+}
+
+// ═══════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════
+function log(msg, type="sys"){ G.log.unshift({msg,type}); if(G.log.length>40) G.log.pop(); }
+
+function renderFuel(cur, max) {
+  return Array.from({length:10},(_,i)=>`<div class="fuel-crystal${i<cur?' active':''}"></div>`).join('')
+    + `<span class="fuel-label">${cur}/${max}</span>`;
+}
+
+function canAttack(c) {
+  return c && c.atk>0 && !c.hasAttacked && !c.isSick;
+}
+
+function renderCardZoom(c) {
+  const wound = c.hp<c.maxHp;
+  return `<div class="card-zoom">
+    <div class="zoom-mana">${c.cost}</div>
+    <div class="zoom-portrait">${portraitArt(c,235)}</div>
+    <div class="zoom-name">${c.name}</div>
+    <div class="zoom-text">${c.text||'&nbsp;'}</div>
+    <div class="zoom-stats">
+      <div class="stat-gem gem-atk">${c.atk}</div>
+      <div class="stat-gem gem-hp${wound?' wounded':''}">${c.hp}</div>
+    </div>
+  </div>`;
+}
+
+let cardPreviewTimer = null;
+
+function showCardPreview(c) {
+  if(!c) return;
+  const preview = document.getElementById("card-preview");
+  preview.innerHTML = renderCardZoom(c);
+  preview.classList.add("show");
+}
+
+function scheduleCardPreview(c) {
+  clearTimeout(cardPreviewTimer);
+  hideCardPreview();
+  cardPreviewTimer = setTimeout(()=>showCardPreview(c), 350);
+}
+
+function showHandCardPreview(idx) {
+  scheduleCardPreview(G.player.hand[idx]);
+}
+
+function showBoardCardPreview(side, idx) {
+  scheduleCardPreview((side==="player"?G.player:G.ai).board[idx]);
+}
+
+function hideCardPreview() {
+  clearTimeout(cardPreviewTimer);
+  cardPreviewTimer = null;
+  const preview = document.getElementById("card-preview");
+  preview.classList.remove("show");
+}
+
+function renderMinion(c, isPlayer, idx) {
+  const selAtk  = isPlayer && idx===G.selBoard;
+  const canAtk  = isPlayer && canAttack(c) && G.phase==='player';
+  const hasTauntAI = !isPlayer && G.ai.board.some(x=>x.taunt);
+  const validTgt = !isPlayer && G.selBoard>=0 && G.phase==='player' && (!hasTauntAI||c.taunt);
+  const exh      = isPlayer && (c.hasAttacked||c.isSick);
+  let cls="minion-card";
+  if(selAtk) cls+=" selected-attacker";
+  if(canAtk&&!selAtk) cls+=" can-attack";
+  if(validTgt) cls+=" valid-target";
+  if(exh) cls+=" exhausted";
+  const onclick = isPlayer ? `onclick="selectAttacker(${idx})"` : `onclick="attackMinion(${idx})"`;
+  const wound = c.hp<c.maxHp;
+  const hover = isPlayer
+    ? `onmouseenter="showBoardCardPreview('player',${idx})"`
+    : `onmouseenter="showBoardCardPreview('ai',${idx})"`;
+  return `<div class="${cls}" data-card-id="${c.id}" ${onclick} ${hover} onmouseleave="hideCardPreview()">
+    ${c.taunt?'<div class="taunt-ring"></div>':''}
+    <div class="card-portrait-mini">${portraitArt(c,54)}</div>
+    <div class="card-name-mini">${c.name}</div>
+    ${c.text?`<div class="card-text-mini">${c.text}</div>`:''}
+    <div class="card-stats">
+      <div class="stat-gem gem-atk">${c.atk}</div>
+      <div class="stat-gem gem-hp${wound?' wounded':''}">${c.hp}</div>
+    </div>
+  </div>`;
+}
+
+function renderHandCard(c, idx) {
+  const sel     = idx===G.selHand;
+  const afford  = G.player.fuel>=c.cost;
+  let cls="hand-card";
+  if(sel) cls+=" selected-hand";
+  if(!afford) cls+=" cant-afford";
+  return `<div class="${cls}" onclick="selectHandCard(${idx})" onmouseenter="showHandCardPreview(${idx})" onmouseleave="hideCardPreview()">
+    <div class="mana-gem">${c.cost}</div>
+    <div class="hand-portrait">${portraitArt(c,48)}</div>
+    <div class="hand-name">${c.name}</div>
+    <div class="hand-text">${c.text||'&nbsp;'}</div>
+    <div class="hand-stats">
+      <div class="stat-gem gem-atk">${c.atk}</div>
+      <div class="stat-gem gem-hp">${c.hp}</div>
+    </div>
+  </div>`;
+}
+
+function render() {
+  renderMusicToggle();
+  const ip=G.phase==='player'&&!G.gameOver;
+  const hasTauntAI = G.ai.board.some(c=>c.taunt);
+  const hasTauntPl = G.player.board.some(c=>c.taunt);
+  const canHeroAtk = G.selBoard>=0 && ip && !hasTauntAI;
+
+  // ── AI Info ──
+  document.getElementById("ai-info").innerHTML=`
+    <div class="hp-orb">
+      <div class="hp-icon${canHeroAtk?' valid-target':''}" id="ai-hero-hp" onclick="attackFace()">${G.ai.hp}</div>
+      <span>自動化AI</span>
+    </div>
+    <div style="display:flex;gap:2px;align-items:center;">
+      ${Array.from({length:G.ai.hand.length},()=>'<div class="ai-hand-card"></div>').join('')}
+    </div>
+    <span class="info-extra">燃料 ${G.ai.fuel}/${G.ai.maxFuel} ｜ 牌組 ${G.ai.deck.length}</span>
+    ${hasTauntAI?'<span style="font-size:9px;color:#88bb30;margin-left:4px;">⚠攔截</span>':''}
+  `;
+
+  // ── AI Board ──
+  const aiBoardEl=document.getElementById("ai-board");
+  if(!G.ai.board.length){
+    aiBoardEl.innerHTML=canHeroAtk
+      ?`<div class="hero-btn valid-target" onclick="attackFace()">⚙<div class="hp-badge">${G.ai.hp}</div></div>`
+      :`<span class="board-empty">[ 空場 ]</span>`;
+  } else {
+    let heroHtml='';
+    if(canHeroAtk) heroHtml=`<div class="hero-btn valid-target" onclick="attackFace()">⚙<div class="hp-badge">${G.ai.hp}</div></div>`;
+    aiBoardEl.innerHTML=heroHtml+G.ai.board.map((c,i)=>renderMinion(c,false,i)).join('');
+  }
+
+  // ── Player Board ──
+  const plBoardEl=document.getElementById("player-board");
+  plBoardEl.innerHTML=G.player.board.length
+    ? G.player.board.map((c,i)=>renderMinion(c,true,i)).join('')
+    : `<span class="board-empty">[ 空場 ]</span>`;
+
+  // ── Controls ──
+  const sc=G.selHand>=0?G.player.hand[G.selHand]:null;
+  const canDeploy=sc&&G.player.fuel>=sc.cost&&G.player.board.length<7;
+  const hint = !ip?'AI 思考中…':
+    G.selBoard>=0?'⚔ 選擇攻擊目標（敵方手下或英雄）':
+    G.selHand>=0?'點選【部署】出牌，或選擇友方手下攻擊':
+    '選取手牌出牌，或點選己方手下攻擊';
+  document.getElementById("player-controls").innerHTML=`
+    <button class="btn primary" onclick="deployCard()" ${!ip||!canDeploy?'disabled':''}>
+      ⚙ 部署${sc?` (${sc.cost}燃料)`:''}
+    </button>
+    <button class="btn" onclick="endPlayerTurn()" ${!ip?'disabled':''}>結束回合</button>
+    <button class="btn danger" onclick="surrender()" ${!ip?'disabled':''}>投降</button>
+    <span class="phase-hint">${hint}</span>
+  `;
+
+  // ── Player Info ──
+  document.getElementById("player-info").innerHTML=`
+    <div class="hp-orb">
+      <div class="hp-icon" id="player-hero-hp">${G.player.hp}</div>
+      <span>林工程師</span>
+    </div>
+    <div class="fuel-bar">${renderFuel(G.player.fuel,G.player.maxFuel)}</div>
+    <span class="info-extra">牌組 ${G.player.deck.length}</span>
+    ${hasTauntPl?'<span style="font-size:9px;color:#88bb30;margin-left:4px;">⚠攔截</span>':''}
+  `;
+
+  // ── Hand ──
+  document.getElementById("player-hand").innerHTML=G.player.hand.length
+    ? G.player.hand.map((c,i)=>renderHandCard(c,i)).join('')
+    : `<span style="color:rgba(200,170,110,.25);font-size:11px;font-style:italic;">無手牌</span>`;
+
+  // ── AI thinking ──
+  document.getElementById("ai-thinking").style.display=G.aiThinking?'block':'none';
+
+  // ── Log ──
+  const typeMap={player:'log-player',ai:'log-ai',sys:'log-sys',dmg:'log-dmg',death:'log-death'};
+  document.getElementById("game-log").innerHTML=
+    G.log.map(l=>`<div class="log-entry ${typeMap[l.type]||'log-sys'}">${l.msg}</div>`).join('');
+
+  // ── Banner ──
+  document.getElementById("turn-banner").textContent=
+    ip?`第 ${G.turn} 回合 · 你的回合`:`第 ${G.turn} 回合 · AI 回合`;
+}
+
+initGame();
+</script>
+</body>
+</html>

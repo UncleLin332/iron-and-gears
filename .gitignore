@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules
+node_modules/
+
+# Claude Code workspace settings
+.claude/
+
+# Research PDFs (copyright)
+research/*.pdf
+
+# Auto-generated outputs
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+balance_analysis/outputs/charts/*.png
